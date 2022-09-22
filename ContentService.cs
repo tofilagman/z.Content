@@ -50,7 +50,7 @@ namespace z.Content
             if (fileData.Length <= 0)
                 throw new Exception("File length is zero");
 
-            var cfname = $"{Utils.GenerateCode()}{ Path.GetExtension(fileName) }";
+            var cfname = $"{Utils.GenerateCode()}{Path.GetExtension(fileName)}";
             var checkSum = Utils.CheckSum(fileData);
 
             var content = new FileContent
@@ -125,12 +125,12 @@ namespace z.Content
             return mfile;
         }
 
-        public async Task<List<string>> GetList(string folder)
+        public async Task<List<FileContentWithDate>> GetList()
         {
             return Option.Type switch
             {
-                FileSystemOptionType.Ftp => await FtpGetList(folder),
-                FileSystemOptionType.Docker => await DockerGetList(folder),
+                FileSystemOptionType.Ftp => await FtpGetList(),
+                FileSystemOptionType.Docker => await DockerGetList(),
                 _ => throw new NotImplementedException(),
             };
         }
@@ -210,12 +210,17 @@ namespace z.Content
             });
         }
 
-        private async Task<List<string>> FtpGetList(string folder)
+        private async Task<List<FileContentWithDate>> FtpGetList()
         {
             return await FtpProcess(async client =>
             {
-                var lst = await client.GetListingAsync(folder, FtpListOption.NameList);
-                return lst.Select(x => x.Name).ToList();
+                var lst = await client.GetListingAsync("/", FtpListOption.NameList | FtpListOption.SizeModify);
+                return lst.Select(x => new FileContentWithDate
+                {
+                    FileName = x.Name,
+                    Length = x.Size,
+                    DateCreated = x.Modified
+                }).ToList();
             });
         }
 
@@ -253,10 +258,24 @@ namespace z.Content
             return await Task.FromResult(fs.ToByteArray());
         }
 
-        private async Task<List<string>> DockerGetList(string folder)
+        private async Task<List<FileContentWithDate>> DockerGetList()
         {
-            var lst = Directory.GetFiles(Path.Combine(Environment.ContentRootPath, Option.Address, folder), "*.*", SearchOption.TopDirectoryOnly);
-            return await Task.FromResult(lst.ToList());
+            var npath = Path.Combine(Environment.ContentRootPath, Option.Address);
+            var lst = Directory.GetFiles(npath, "*.*", SearchOption.TopDirectoryOnly);
+
+            var kd = new List<FileContentWithDate>();
+            foreach (var s in lst)
+            {
+                var fld = new FileInfo(Path.Combine(npath, s));
+                kd.Add(new FileContentWithDate
+                {
+                    FileName = fld.Name,
+                    Length = fld.Length,
+                    DateCreated = fld.CreationTime
+                });
+            }
+
+            return await Task.FromResult(kd);
         }
 
         private async Task DockerDeleteFile(string filename)
