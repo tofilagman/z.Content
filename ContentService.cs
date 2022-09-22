@@ -105,17 +105,20 @@ namespace z.Content
             return content;
         }
 
-        public async Task<byte[]> GetFile(string fileName, string checkSum = null)
+        public async Task<byte[]> GetFile(string fileName, string checkSum = null, bool throwIfNotExists = true)
         {
             if (fileName == null)
                 throw new Exception($"File: {fileName} does not exists");
 
             var mfile = Option.Type switch
             {
-                FileSystemOptionType.Ftp => await FtpGetFile(fileName),
-                FileSystemOptionType.Docker => await DockerGetFile(fileName),
+                FileSystemOptionType.Ftp => await FtpGetFile(fileName, throwIfNotExists),
+                FileSystemOptionType.Docker => await DockerGetFile(fileName, throwIfNotExists),
                 _ => throw new NotImplementedException(),
             };
+
+            if (mfile.Length == 0)
+                return null;
 
             var chkSum = Utils.CheckSum(mfile);
             if (!string.IsNullOrEmpty(checkSum))
@@ -150,6 +153,16 @@ namespace z.Content
                     break;
                 default:
                     throw new NotImplementedException();
+            };
+        }
+
+        public async Task<bool> FileExists(string fileName)
+        {
+            return Option.Type switch
+            {
+                FileSystemOptionType.Ftp => await FtpFileExists(fileName),
+                FileSystemOptionType.Docker => await DockerFileExists(fileName),
+                _ => throw new NotImplementedException(),
             };
         }
 
@@ -198,14 +211,18 @@ namespace z.Content
             });
         }
 
-        private async Task<byte[]> FtpGetFile(string filename)
+        private async Task<byte[]> FtpGetFile(string filename, bool throwIfNotExists)
         {
             return await FtpProcess(async client =>
             {
                 if (!await client.FileExistsAsync(filename))
                 {
-                    throw new Exception($"Requested file: {filename} does not exists");
+                    if (throwIfNotExists)
+                        throw new Exception($"Requested file: {filename} does not exists");
+                    else
+                        return Array.Empty<byte>();
                 }
+
                 return await client.DownloadAsync(filename, 0);
             });
         }
@@ -235,6 +252,14 @@ namespace z.Content
             });
         }
 
+        private async Task<bool> FtpFileExists(string filename)
+        {
+            return await FtpProcess(async client =>
+            {
+                return await client.FileExistsAsync(filename);
+            });
+        }
+
         #endregion
 
         #region Docker
@@ -248,11 +273,16 @@ namespace z.Content
             await File.WriteAllBytesAsync(pth, fileData);
         }
 
-        private async Task<byte[]> DockerGetFile(string filename)
+        private async Task<byte[]> DockerGetFile(string filename, bool throwIfNotExists)
         {
             var pth = Path.Combine(Environment.ContentRootPath, Option.Address, filename);
             if (!File.Exists(pth))
-                throw new Exception($"Requested file: {filename} does not exists");
+            {
+                if (throwIfNotExists)
+                    throw new Exception($"Requested file: {filename} does not exists");
+                else
+                    return Array.Empty<byte>();
+            }
 
             using var fs = File.OpenRead(pth);
             return await Task.FromResult(fs.ToByteArray());
@@ -284,6 +314,12 @@ namespace z.Content
             if (File.Exists(pth))
                 File.Delete(pth);
             await Task.CompletedTask;
+        }
+
+        private async Task<bool> DockerFileExists(string filename)
+        {
+            var pth = Path.Combine(Environment.ContentRootPath, Option.Address, filename);
+            return await Task.FromResult(File.Exists(pth));
         }
 
         #endregion
