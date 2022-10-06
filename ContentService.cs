@@ -31,7 +31,8 @@ namespace z.Content
                 case FileSystemOptionType.Ftp:
                     await FtpProcess(async client =>
                     {
-                        await client.ConnectAsync();
+                        client.Connect();
+                        await Task.CompletedTask;
                     });
                     break;
                 case FileSystemOptionType.Docker:
@@ -128,6 +129,15 @@ namespace z.Content
             return mfile;
         }
 
+        public async Task<string> GetFileBase64(string fileName, string checkSum = null, bool throwIfNotExists = true)
+        {
+            var data = await GetFile(fileName, checkSum, throwIfNotExists);
+            var base64 = Convert.ToBase64String(data);
+            var contentType = Path.GetExtension(fileName).GetContentType();
+
+            return $"data:{contentType};base64,{base64}";
+        }
+
         public async Task<List<FileContentWithDate>> GetList()
         {
             return Option.Type switch
@@ -170,10 +180,11 @@ namespace z.Content
 
         private async Task<FtpClient> FtpSetup()
         {
-            var client = Option.Port.HasValue ? new FtpClient(Option.Address, Option.Port.Value, Option.Username, Option.Password)
+            var client = Option.Port.HasValue ? new FtpClient(Option.Address, Option.Username, Option.Password, Option.Port.Value)
                                               : new FtpClient(Option.Address, Option.Username, Option.Password);
-            await client.ConnectAsync();
-            return client;
+            client.Connect();
+
+            return await Task.FromResult(client);
         }
 
         private async Task<T> FtpProcess<T>(Func<IFtpClient, Task<T>> action)
@@ -207,7 +218,8 @@ namespace z.Content
         {
             await FtpProcess(async client =>
             {
-                await client.UploadAsync(fileData, filename, FtpRemoteExists.Overwrite);
+                client.UploadBytes(fileData, filename, FtpRemoteExists.Overwrite);
+                await Task.CompletedTask;
             });
         }
 
@@ -215,15 +227,17 @@ namespace z.Content
         {
             return await FtpProcess(async client =>
             {
-                if (!await client.FileExistsAsync(filename))
+                if (!client.FileExists(filename))
                 {
                     if (throwIfNotExists)
                         throw new Exception($"Requested file: {filename} does not exists");
                     else
-                        return Array.Empty<byte>();
+                        return await Task.FromResult(Array.Empty<byte>());
                 }
 
-                return await client.DownloadAsync(filename, 0);
+                if (client.DownloadBytes(out var bts, filename))
+                    return await Task.FromResult(bts);
+                return await Task.FromResult(Array.Empty<byte>());
             });
         }
 
@@ -231,13 +245,13 @@ namespace z.Content
         {
             return await FtpProcess(async client =>
             {
-                var lst = await client.GetListingAsync("/", FtpListOption.NameList | FtpListOption.SizeModify);
-                return lst.Select(x => new FileContentWithDate
+                var lst = client.GetListing("/", FtpListOption.NameList | FtpListOption.SizeModify);
+                return await Task.FromResult(lst.Select(x => new FileContentWithDate
                 {
                     FileName = x.Name,
                     Length = x.Size,
                     DateCreated = x.Modified
-                }).ToList();
+                }).ToList());
             });
         }
 
@@ -245,10 +259,9 @@ namespace z.Content
         {
             await FtpProcess(async client =>
             {
-                if (await client.FileExistsAsync(fileName))
-                {
-                    await client.DeleteFileAsync(fileName);
-                }
+                if (client.FileExists(fileName))
+                    client.DeleteFile(fileName);
+                await Task.CompletedTask;
             });
         }
 
@@ -256,7 +269,7 @@ namespace z.Content
         {
             return await FtpProcess(async client =>
             {
-                return await client.FileExistsAsync(filename);
+                return await Task.FromResult(client.FileExists(filename));
             });
         }
 

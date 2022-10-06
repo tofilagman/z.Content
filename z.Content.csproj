@@ -4,15 +4,15 @@
     <TargetFramework>net6.0</TargetFramework>
     <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
     <PackageReadmeFile>readme.md</PackageReadmeFile>
-    <Version>1.0.3</Version>
+    <Version>1.0.4</Version>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="FluentFTP" Version="37.0.2" />
-    <PackageReference Include="Microsoft.AspNetCore.Http.Features" Version="5.0.14" />
+    <PackageReference Include="FluentFTP" Version="41.0.0" />
+    <PackageReference Include="Microsoft.AspNetCore.Http.Features" Version="5.0.17" />
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="6.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="6.0.0" />
-    <PackageReference Include="z.Data.Standard" Version="1.2.18" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="6.0.2" />
+    <PackageReference Include="z.Data.Standard" Version="1.2.19" />
   </ItemGroup>
 
   <ItemGroup>
